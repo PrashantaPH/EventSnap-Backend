@@ -9,32 +9,21 @@ pipeline {
     }
 
     stages {
-        // Stage 1: Run npm install inside a temporary Docker container
-        stage('Install Dependencies') {
-            steps {
-                echo 'Running npm install inside Node container...'
-                // This mounts your code into a node container, runs install, then disappears
-                sh "docker run --rm -v ${WORKSPACE}:/app -w /app node:20-alpine npm install"
-            }
-        }
-
-        // Stage 2: Build the Production Docker Image
+        // Stage 1: Build the Image (Docker will run npm install inside)
         stage('Docker Image Build') {
             steps {
-                echo 'Building final Docker Image...'
+                echo 'Building Docker Image (npm install happens here)...'
                 sh "docker build --no-cache -t ${IMAGE_NAME} ."
             }
         }
 
-        // Stage 3: Cleanup and Deploy
+        // Stage 2: Cleanup and Deploy
         stage('Docker Deploy') {
             steps {
                 script {
-                    echo 'Removing old containers if they exist...'
-                    // Remove by name
+                    echo 'Cleaning up old containers...'
                     sh "docker rm -f ${CONTAINER_NAME} || true"
 
-                    // Remove any container blocking Port 4000
                     sh """
                         OLD_ID=\$(docker ps -q --filter "publish=${HOST_PORT}")
                         if [ ! -z "\$OLD_ID" ]; then
