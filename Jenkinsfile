@@ -5,7 +5,7 @@ pipeline {
         IMAGE_NAME = "eventsnap-svc"
         CONTAINER_NAME = "eventsnap-svc-container"
         HOST_PORT = "4000"
-        APP_PORT = "3000"
+        APP_PORT = "5000"
     }
 
     stages {
