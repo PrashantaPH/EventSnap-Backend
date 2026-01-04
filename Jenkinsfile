@@ -1,54 +1,39 @@
 pipeline {
     agent any
 
-    // Ensure Node.js is configured in Jenkins Global Tool Configuration
-    tools {
-        nodejs 'node-20' // This name must match your Jenkins Tool name
-    }
-
     environment {
-        IMAGE_NAME = "eventsnap-svc"
-        CONTAINER_NAME = "eventsnap-svc-container"
-        HOST_PORT = "4000"
-        APP_PORT = "3000"
+        IMAGE_NAME = "node-app-svc"
+        CONTAINER_NAME = "node-app-container"
     }
 
     stages {
-        // Stage 1: Install dependencies and Build
         stage('Install & Build') {
+            agent {
+                docker { 
+                    image 'node:20-alpine' 
+                    // This maps the workspace so the build persists
+                    args '-u root' 
+                }
+            }
             steps {
                 sh 'npm install'
-                // Optional: sh 'npm run build' (if using TS or a framework)
+                // sh 'npm run build' (if needed)
             }
         }
 
-        // Stage 2: Build the Docker Image
         stage('Docker Image Build') {
             steps {
                 sh "docker build --no-cache -t ${IMAGE_NAME} ."
             }
         }
 
-        // Stage 3: Clean up old container and Run the new one
         stage('Docker Deploy') {
             steps {
                 script {
-                    // Remove the old container if it exists
                     sh "docker rm -f ${CONTAINER_NAME} || true"
-
-                    // Start the new container
-                    sh "docker run -d --name ${CONTAINER_NAME} -p ${HOST_PORT}:${APP_PORT} ${IMAGE_NAME}"
+                    sh "docker run -d --name ${CONTAINER_NAME} -p 3000:3000 ${IMAGE_NAME}"
                 }
             }
-        }
-    }
-
-    post {
-        success {
-            echo "Successfully deployed to http://localhost:${HOST_PORT}"
-        }
-        always {
-            sh 'docker image prune -f'
         }
     }
 }
