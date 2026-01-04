@@ -1,11 +1,6 @@
 pipeline {
     agent any
 
-    // Ensure Node.js is configured in Jenkins Global Tool Configuration
-    tools {
-        nodejs 'node-20' // This name must match your Jenkins Tool name exactly
-    }
-
     environment {
         IMAGE_NAME = "eventsnap-svc"
         CONTAINER_NAME = "eventsnap-svc-container"
@@ -14,65 +9,51 @@ pipeline {
     }
 
     stages {
-        // Stage 1: Install dependencies
-        stage('Install & Build') {
+        // Stage 1: Run npm install inside a temporary Docker container
+        stage('Install Dependencies') {
             steps {
-                echo 'Installing dependencies...'
-                sh 'npm install'
-                // Uncomment if you use TypeScript: sh 'npm run build'
+                echo 'Running npm install inside Node container...'
+                // This mounts your code into a node container, runs install, then disappears
+                sh "docker run --rm -v ${WORKSPACE}:/app -w /app node:20-alpine npm install"
             }
         }
 
-        // Stage 2: Build the Docker Image
+        // Stage 2: Build the Production Docker Image
         stage('Docker Image Build') {
             steps {
-                echo 'Building Docker Image...'
-                // --no-cache ensures fresh code is pulled into the image
+                echo 'Building final Docker Image...'
                 sh "docker build --no-cache -t ${IMAGE_NAME} ."
             }
         }
 
-        // Stage 3: Clean up and Deploy
+        // Stage 3: Cleanup and Deploy
         stage('Docker Deploy') {
             steps {
                 script {
-                    echo 'Cleaning up existing containers...'
-                    
-                    // 1. Remove the old container by name if it exists
+                    echo 'Removing old containers if they exist...'
+                    // Remove by name
                     sh "docker rm -f ${CONTAINER_NAME} || true"
 
-                    // 2. Clear any OTHER container using the same port (Port 4000)
-                    // This fixes the "Bind: Only one usage of each socket address" error
+                    // Remove any container blocking Port 4000
                     sh """
                         OLD_ID=\$(docker ps -q --filter "publish=${HOST_PORT}")
                         if [ ! -z "\$OLD_ID" ]; then
-                            echo "Found another container on port ${HOST_PORT}, removing..."
                             docker rm -f \$OLD_ID
                         fi
                     """
 
-                    // 3. Start the new container
-                    echo "Starting new container on port ${HOST_PORT}..."
+                    echo "Starting container on port ${HOST_PORT}..."
                     sh "docker run -d --name ${CONTAINER_NAME} -p ${HOST_PORT}:${APP_PORT} ${IMAGE_NAME}"
                 }
             }
         }
     }
 
-    // Post-deployment actions
     post {
         success {
-            echo "-----------------------------------------------------------"
-            echo "Deployment Successful!"
-            echo "App is running at: http://localhost:${HOST_PORT}"
-            echo "-----------------------------------------------------------"
-        }
-        failure {
-            echo "Deployment failed. Please check the logs above."
+            echo "Successfully deployed to http://localhost:${HOST_PORT}"
         }
         always {
-            // Cleans up "dangling" images to save disk space
-            echo 'Cleaning up system images...'
             sh 'docker image prune -f'
         }
     }
